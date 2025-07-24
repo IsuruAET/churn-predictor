@@ -66,16 +66,17 @@ def batch_predict_churn(file: UploadFile = File(...)):
     try:
         # Read uploaded CSV into DataFrame
         df = pd.read_csv(file.file)
-        # Ensure correct columns
-        df = df[numeric]
+        original = df.copy()  # keep all columns
+        # Ensure correct columns for prediction
+        df_numeric = df[numeric]
         # Scale
-        df[numeric] = scaler.transform(df[numeric])
+        df_numeric = scaler.transform(df_numeric)
         # Predict
-        preds = model.predict(df)
-        df["churn_prediction"] = preds
+        preds = model.predict(df_numeric)
+        original["churn_prediction"] = preds
         # Convert to CSV in-memory
         out = io.StringIO()
-        df.to_csv(out, index=False)
+        original.to_csv(out, index=False)
         out.seek(0)
         return StreamingResponse(out, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=churn_predictions.csv"})
     except Exception as e:
