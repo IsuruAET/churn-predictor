@@ -5,7 +5,7 @@ os.environ["STREAMLIT_BROWSER_GATHERUSAGESTATS"] = "false"      # disable teleme
 import streamlit as st
 import requests, pandas as pd
 
-API_URL = "http://localhost:8000/predict/"
+API_URL = "http://localhost:8000/"
 
 st.set_page_config(page_title="Mosaic Churn Predictor", page_icon="🛒")
 st.title("🛒 Customer Churn Predictor")
@@ -29,7 +29,7 @@ with st.form("single_customer"):
             "avg_order_total_monthly": avg_order_total_monthly
         }
         try:
-            r = requests.post(API_URL, json=payload, timeout=15)
+            r = requests.post(API_URL + "predict/", json=payload, timeout=15)
             if r.status_code != 200:
                 st.warning(f"API error {r.status_code}: {r.text}")
             else:
@@ -52,7 +52,7 @@ if csv and st.button("Score batch"):
     preds = []
     progress = st.progress(0, text="Scoring customers...")
     for i, row in df.iterrows():
-        r = requests.post(API_URL, json=row.to_dict())
+        r = requests.post(API_URL + "predict/", json=row.to_dict())
         preds.append(r.json().get("churn_prediction", None))
         progress.progress((i + 1) / len(df))
     df["churn_prediction"] = preds
