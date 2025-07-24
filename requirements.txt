@@ -1,0 +1,12 @@
+sqlalchemy
+pandas
+numpy
+scikit-learn
+pymysql
+joblib
+fastapi
+pydantic
+uvicorn
+python-multipart
+streamlit
+requests

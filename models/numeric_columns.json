@@ -1,0 +1,7 @@
+[
+  "days_since_last_order",
+  "avg_order_count_weekly",
+  "avg_order_count_monthly",
+  "avg_order_total_weekly",
+  "avg_order_total_monthly"
+]
