@@ -46,20 +46,18 @@ st.subheader("Batch scoring (CSV)")
 csv = st.file_uploader("Upload CSV with the same 5 columns", type="csv")
 
 if csv and st.button("Score batch"):
-    df = pd.read_csv(csv)
-    st.write("Preview:", df.head())
-
-    preds = []
-    progress = st.progress(0, text="Scoring customers...")
-    for i, row in df.iterrows():
-        r = requests.post(API_URL + "predict/", json=row.to_dict())
-        preds.append(r.json().get("churn_prediction", None))
-        progress.progress((i + 1) / len(df))
-    df["churn_prediction"] = preds
-    progress.empty()
-
-    st.success("Batch scoring complete")
-    st.dataframe(df)
-    st.download_button("Download results as CSV",
-                       df.to_csv(index=False).encode(),
-                       file_name="churn_predictions.csv")
+    # Send CSV to backend batch endpoint
+    with st.spinner("Uploading and scoring batch..."):
+        files = {"file": (csv.name, csv, "text/csv")}
+        r = requests.post(API_URL + "batch-predict/", files=files)
+        if r.status_code != 200:
+            st.warning(f"API error {r.status_code}: {r.text}")
+        else:
+            # Read returned CSV
+            import io
+            df = pd.read_csv(io.StringIO(r.text))
+            st.success("Batch scoring complete")
+            st.dataframe(df)
+            st.download_button("Download results as CSV",
+                               r.content,
+                               file_name="churn_predictions.csv")

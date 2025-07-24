@@ -7,6 +7,8 @@ Expects 5 numeric features.
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel
 import joblib, json, pandas as pd
+from fastapi.responses import StreamingResponse
+import io
 
 # --------------------------------------------------------------
 # Load artefacts
@@ -56,21 +58,26 @@ def predict_churn(data: CustomerData):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.post("/batch_predict/")
+# --------------------------------------------------------------
+# Batch prediction endpoint
+# --------------------------------------------------------------
+@app.post("/batch-predict/")
 def batch_predict_churn(file: UploadFile = File(...)):
     try:
-        if not file.filename.endswith('.csv'):
-            raise HTTPException(status_code=400, detail="Only CSV files are supported.")
-        # Read CSV into DataFrame
+        # Read uploaded CSV into DataFrame
         df = pd.read_csv(file.file)
         # Ensure correct columns
-        if set(numeric) - set(df.columns):
-            raise HTTPException(status_code=400, detail=f"Missing columns: {set(numeric) - set(df.columns)}")
         df = df[numeric]
         # Scale
         df[numeric] = scaler.transform(df[numeric])
         # Predict
         preds = model.predict(df)
-        return {"churn_predictions": preds.tolist()}
+        df["churn_prediction"] = preds
+        # Convert to CSV in-memory
+        out = io.StringIO()
+        df.to_csv(out, index=False)
+        out.seek(0)
+        return StreamingResponse(out, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=churn_predictions.csv"})
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
