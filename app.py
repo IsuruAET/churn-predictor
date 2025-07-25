@@ -15,10 +15,10 @@ st.write("Enter a single customer **or** upload a CSV to score many customers.")
 with st.form("single_customer"):
     st.subheader("Manual input")
     days_since_last_order = st.number_input("Days Since Last Order", 0, step=1, value=70)
-    avg_order_count_weekly = st.number_input("Avg. Weekly Order Count", 0.0, step=1.0)
-    avg_order_count_monthly = st.number_input("Avg. Monthly Order Count", 0.0, step=1.0)
-    avg_order_total_weekly = st.number_input("Avg. Weekly Order Total ($)", 0.0, 5000.0, step=10.0)
-    avg_order_total_monthly = st.number_input("Avg. Monthly Order Total ($)", 0.0, 20000.0, step=50.0)
+    avg_order_count_weekly = st.number_input("Avg. Weekly Order Count", 0.0, step=1.0, value=10.0)
+    avg_order_count_monthly = st.number_input("Avg. Monthly Order Count", 0.0, step=1.0, value=30.0)
+    avg_order_total_weekly = st.number_input("Avg. Weekly Order Total ($)", 0.0, 5000.0, step=10.0, value=100.0)
+    avg_order_total_monthly = st.number_input("Avg. Monthly Order Total ($)", 0.0, 20000.0, step=50.0, value=500.0)
 
     if st.form_submit_button("Predict ⏩"):
         payload = {
