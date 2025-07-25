@@ -10,6 +10,7 @@ import joblib, json, pandas as pd
 from fastapi.responses import StreamingResponse
 import io
 from db_config import get_db_engine
+from openai_service import generate_churn_recommendations, generate_weekly_churn_recommendations
 
 # --------------------------------------------------------------
 # Load artefacts
@@ -22,6 +23,22 @@ numeric = json.load(open("models/numeric_columns.json"))  # 5 numeric columns
 weekly_model   = joblib.load("models/churn_model_weekly.pkl")
 weekly_scaler  = joblib.load("models/scaler_weekly.pkl")
 weekly_numeric = json.load(open("models/numeric_columns_weekly.json"))  # 4 numeric columns
+
+# Feature importance mapping
+feature_importance_map = {
+    "days_since_last_order": "Days Since Last Order",
+    "avg_order_count_weekly": "Average Weekly Order Count", 
+    "avg_order_count_monthly": "Average Monthly Order Count",
+    "avg_order_total_weekly": "Average Weekly Order Total",
+    "avg_order_total_monthly": "Average Monthly Order Total"
+}
+
+weekly_feature_importance_map = {
+    "last12weeks_order_count": "Last 12 Weeks Order Count",
+    "last12weeks_order_total": "Last 12 Weeks Order Total",
+    "last12weeks_discount_total": "Last 12 Weeks Discount Total",
+    "last12weeks_loyalty_earned": "Last 12 Weeks Loyalty Earned"
+}
 
 # --------------------------------------------------------------
 # FastAPI app
@@ -59,7 +76,43 @@ def predict_churn(data: CustomerData):
 
         # 4. Predict
         pred = int(model.predict(df)[0])
-        return {"churn_prediction": pred}
+        
+        # 5. Get feature importance (using permutation importance or feature coefficients)
+        if hasattr(model, 'feature_importances_'):
+            # For tree-based models (Random Forest, XGBoost, etc.)
+            importances = model.feature_importances_
+        elif hasattr(model, 'coef_'):
+            # For linear models (Logistic Regression, etc.)
+            importances = abs(model.coef_[0])
+        else:
+            # Fallback: use permutation importance
+            from sklearn.inspection import permutation_importance
+            result = permutation_importance(model, df, [pred], n_repeats=10, random_state=42)
+            importances = result.importances_mean
+        
+        # 6. Get top 2 features
+        feature_importance_pairs = list(zip(numeric, importances))
+        feature_importance_pairs.sort(key=lambda x: x[1], reverse=True)
+        top_features = feature_importance_pairs[:2]
+        
+        # 7. Format response
+        top_contributors = []
+        for feature, importance in top_features:
+            top_contributors.append({
+                "feature": feature_importance_map.get(feature, feature),
+                "importance": float(importance)
+            })
+        
+        # 8. Generate recommendations if churn risk is high
+        recommendations = ""
+        if pred == 1:
+            recommendations = generate_churn_recommendations(top_contributors, data.model_dump())
+        
+        return {
+            "churn_prediction": pred,
+            "top_contributing_factors": top_contributors,
+            "recommendations": recommendations
+        }
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -138,21 +191,45 @@ def next_week_churn_predict():
         churned_customers = original[predictions == 1].copy()
         churned_customers['churn_prediction'] = predictions[predictions == 1]
         
-        # 7. Select required columns
+        # 7. Get feature importance for weekly model
+        if hasattr(weekly_model, 'feature_importances_'):
+            importances = weekly_model.feature_importances_
+        elif hasattr(weekly_model, 'coef_'):
+            importances = abs(weekly_model.coef_[0])
+        else:
+            from sklearn.inspection import permutation_importance
+            result = permutation_importance(weekly_model, df_scaled, predictions, n_repeats=10, random_state=42)
+            importances = result.importances_mean
+        
+        # 8. Get top 2 features for weekly model
+        feature_importance_pairs = list(zip(weekly_numeric, importances))
+        feature_importance_pairs.sort(key=lambda x: x[1], reverse=True)
+        top_features = feature_importance_pairs[:2]
+        
+        # 9. Add top contributing factors to output
+        churned_customers['top_factor_1'] = weekly_feature_importance_map.get(top_features[0][0], top_features[0][0])
+        churned_customers['top_factor_2'] = weekly_feature_importance_map.get(top_features[1][0], top_features[1][0])
+        
+        # 10. Generate recommendations for weekly churn
+        top_factors_list = [top_features[0][0], top_features[1][0]]
+        weekly_recommendations = generate_weekly_churn_recommendations(top_factors_list)
+        
+        # 11. Select required columns
         output_columns = ['customer_id', 'last12weeks_order_count', 'last12weeks_order_total', 
-                         'last12weeks_discount_total', 'last12weeks_loyalty_earned']
+                         'last12weeks_discount_total', 'last12weeks_loyalty_earned', 
+                         'top_factor_1', 'top_factor_2']
         churned_customers = churned_customers[output_columns]
         
-        # 8. Convert to CSV
+        # 11. Convert to CSV
         out = io.StringIO()
         churned_customers.to_csv(out, index=False)
         out.seek(0)
         
-        return StreamingResponse(
-            out, 
-            media_type="text/csv", 
-            headers={"Content-Disposition": "attachment; filename=next_week_churn_customers.csv"}
-        )
+        return {
+            "csv_data": out.getvalue(),
+            "recommendations": weekly_recommendations,
+            "churn_count": len(churned_customers)
+        }
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

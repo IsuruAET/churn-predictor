@@ -10,3 +10,5 @@ uvicorn
 python-multipart
 streamlit
 requests
+openai
+python-dotenv
