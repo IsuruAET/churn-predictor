@@ -14,9 +14,9 @@ st.write("Enter a single customer **or** upload a CSV to score many customers.")
 # ─────────────────────────── Single-customer form ──────────────────────────
 with st.form("single_customer"):
     st.subheader("Manual input")
-    days_since_last_order = st.number_input("Days Since Last Order", 0.0, 180.0, step=1.0)
-    avg_order_count_weekly = st.number_input("Avg. Weekly Order Count", 0.0, 10.0, step=1.0)
-    avg_order_count_monthly = st.number_input("Avg. Monthly Order Count", 0.0, 20.0, step=1.0)
+    days_since_last_order = st.number_input("Days Since Last Order", 0, step=1, value=70)
+    avg_order_count_weekly = st.number_input("Avg. Weekly Order Count", 0.0, step=1.0)
+    avg_order_count_monthly = st.number_input("Avg. Monthly Order Count", 0.0, step=1.0)
     avg_order_total_weekly = st.number_input("Avg. Weekly Order Total ($)", 0.0, 5000.0, step=10.0)
     avg_order_total_monthly = st.number_input("Avg. Monthly Order Total ($)", 0.0, 20000.0, step=50.0)
 
