@@ -61,3 +61,22 @@ if csv and st.button("Score batch"):
             st.download_button("Download results as CSV",
                                r.content,
                                file_name="churn_predictions.csv")
+
+# ─────────────────────────── Next Week Churn Prediction ──────────────────────────────
+st.subheader("Next Week Churn Prediction")
+st.write("Click the button below to analyze all customers and predict next week churn.")
+
+if st.button("🔮 Predict Next Week Churn", type="primary"):
+    with st.spinner("Fetching customer data and predicting next week churn..."):
+        r = requests.post(API_URL + "next-week-predict/")
+        if r.status_code != 200:
+            st.warning(f"API error {r.status_code}: {r.text}")
+        else:
+            # Read returned CSV
+            import io
+            df = pd.read_csv(io.StringIO(r.text))
+            st.error(f"Found {len(df)} customers predicted to churn next week")
+            st.dataframe(df)
+            st.download_button("Download churn customers list",
+                               r.content,
+                               file_name="next_week_churn_customers.csv")
