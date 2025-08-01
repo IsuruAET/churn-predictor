@@ -42,7 +42,7 @@ def load_sample_data(churn_count: int, non_churn_count: int):
         return None
 
 # Load data button
-if st.button("📊 Load Data", type="primary"):
+if st.button("📊 Load LLM Data", type="primary"):
     with st.spinner(f"Loading data for {total_customers} customers..."):
         response_data = load_sample_data(churn_count, non_churn_count)
         
@@ -270,7 +270,7 @@ def load_ml_data(churn_count: int, non_churn_count: int):
         return None
 
 # Load ML raw data button
-if st.button("📊 Load ML Data", type="secondary"):
+if st.button("📊 Load ML Data", type="primary"):
     with st.spinner(f"Loading raw data for {ml_total_customers} customers..."):
         response_data = load_ml_raw_data(ml_churn_count, ml_non_churn_count)
         
