@@ -148,26 +148,7 @@ else:
                     # Display analysis results
                     st.subheader("🔍 AI Analysis Results")
                     st.write(analysis)
-                    
-                    # Display high-risk customers
-                    if high_risk_customers:
-                        st.error(f"⚠️ AI identified {len(high_risk_customers)} high-risk customers")
-                        
-                        # Filter and display high-risk customers from the original data
-                        high_risk_df = display_df[display_df['customer_id'].astype(str).isin(high_risk_customers)]
-                        
-                        if not high_risk_df.empty:
-                            st.subheader("🚨 High-Risk Customers (AI Identified)")
-                            st.dataframe(high_risk_df, use_container_width=True)
-                            
-                            # Download button for high-risk customers
-                            csv_data = high_risk_df.to_csv(index=False)
-                            st.download_button("Download high-risk customers list",
-                                               csv_data.encode('utf-8'),
-                                               file_name="llm_high_risk_customers.csv")
-                    else:
-                        st.success("✅ AI analysis found no high-risk customers")
-                    
+                           
                     # Display customer summary statistics
                     st.subheader("📊 Customer Summary Statistics")
                     if customer_data:
@@ -185,6 +166,62 @@ else:
                     with col3:
                         risk_rate = len(high_risk_customers) / total_customers if total_customers > 0 else 0
                         st.metric("Risk Rate", f"{risk_rate:.1%}")
+                    
+                    # Display simple comparison: Actual vs LLM Predicted Churn
+                    st.subheader("🔍 Actual vs LLM Predicted Churn Comparison")
+                    
+                    # Get actual churn customers from the data
+                    actual_churn_customers = display_df[display_df['is_churn'] == 1]['customer_id'].unique().tolist()
+                    actual_churn_customers = [str(cid) for cid in actual_churn_customers]
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write("**📊 Actual Churn Customers:**")
+                        if actual_churn_customers:
+                            for customer_id in actual_churn_customers:
+                                st.write(f"• Customer {customer_id}")
+                        else:
+                            st.write("None")
+                        st.metric("Actual Churn Count", len(actual_churn_customers))
+                    
+                    with col2:
+                        st.write("**🤖 LLM Predicted Churn Customers:**")
+                        if high_risk_customers:
+                            for customer_id in high_risk_customers:
+                                st.write(f"• Customer {customer_id}")
+                        else:
+                            st.write("None")
+                        st.metric("Predicted Churn Count", len(high_risk_customers))
+                    
+                    # Show the difference
+                    st.subheader("📈 Comparison Summary")
+                    
+                    # Calculate overlap
+                    actual_set = set(actual_churn_customers)
+                    predicted_set = set(high_risk_customers)
+                    
+                    correctly_identified = len(actual_set.intersection(predicted_set))
+                    missed_churners = len(actual_set - predicted_set)
+                    false_alarms = len(predicted_set - actual_set)
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("✅ Correctly Identified", correctly_identified)
+                    with col2:
+                        st.metric("❌ Missed Churners", missed_churners)
+                    with col3:
+                        st.metric("⚠️ False Alarms", false_alarms)
+                    
+                    # Show detailed breakdown
+                    if correctly_identified > 0:
+                        st.success(f"**Correctly Identified:** {', '.join(actual_set.intersection(predicted_set))}")
+                    
+                    if missed_churners > 0:
+                        st.error(f"**Missed Churners:** {', '.join(actual_set - predicted_set)}")
+                    
+                    if false_alarms > 0:
+                        st.warning(f"**False Alarms:** {', '.join(predicted_set - actual_set)}")
                         
             except Exception as e:
                 st.error(f"Error during LLM prediction: {str(e)}")
