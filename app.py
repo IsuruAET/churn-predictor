@@ -12,8 +12,15 @@ API_URL = "http://localhost:8000/"
 st.set_page_config(page_title="Mosaic Churn Predictor", page_icon="🛒")
 st.title("🛒 Customer Churn Predictor")
 
-# ─────────────────────────── Sample Data Display ──────────────────────────────
-st.subheader("📋 Customer Weekly Order Summary for the Most Recent 20 Consecutive Weeks")
+# ─────────────────────────── SECTION 1: DATA OVERVIEW ──────────────────────────────
+st.header("📋 Data Overview")
+st.write("Customer Weekly Order Summary for the Most Recent 20 Consecutive Weeks")
+
+st.divider()
+
+# ─────────────────────────── SECTION 2: LLM-BASED CHURN PREDICTION ──────────────────────────────
+st.header("🤖 LLM-Based Churn Prediction")
+st.write("AI-powered churn prediction using OpenAI GPT-4 analysis of customer behavior patterns.")
 st.write("Configure and load sample dataset with custom churn and non-churn customer counts.")
 
 # Customer count selection sliders
@@ -115,10 +122,6 @@ if 'original_df' in st.session_state:
     
     # Display the dataframe
     st.dataframe(st.session_state.display_df, use_container_width=True)
-
-# ─────────────────────────── LLM Churn Prediction ──────────────────────────────
-st.subheader("🤖 LLM-Based Churn Prediction")
-st.write("AI-powered churn prediction using OpenAI GPT-4 analysis of customer behavior patterns.")
 
 # Check if data is loaded
 if 'display_df' not in st.session_state:
@@ -224,10 +227,12 @@ else:
                         st.warning(f"**False Alarms:** {', '.join(predicted_set - actual_set)}")
                         
             except Exception as e:
-                st.error(f"Error during LLM prediction: {str(e)}")
+                                        st.error(f"Error during LLM prediction: {str(e)}")
 
-# ─────────────────────────── ML Churn Prediction ──────────────────────────────
-st.subheader("🤖 ML-Based Churn Prediction")
+st.divider()
+
+# ─────────────────────────── SECTION 3: ML-BASED CHURN PREDICTION ──────────────────────────────
+st.header("🤖 ML-Based Churn Prediction")
 st.write("ML-powered churn prediction using time series analysis of customer behavior patterns.")
 
 # Customer count selection for ML prediction
@@ -456,8 +461,10 @@ if 'ml_raw_df' in st.session_state and 'ml_results' in st.session_state:
     if false_alarms > 0:
         st.warning(f"**False Alarms:** {', '.join(predicted_set - actual_set)}")
 
-# ─────────────────────────── Time Series Churn Prediction ──────────────────────────────
-st.subheader("📈 ML-Based Time Series Churn Prediction")
+st.divider()
+
+# ─────────────────────────── SECTION 4: ML-BASED TIME SERIES CHURN PREDICTION ──────────────────────────────
+st.header("📈 ML-Based Time Series Churn Prediction")
 st.write("Advanced churn prediction using time series analysis of customer behavior patterns over the last 12 weeks.")
 
 if st.button("📊 Predict Churn with Time Series Model", type="primary"):
