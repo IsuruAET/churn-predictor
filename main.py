@@ -262,6 +262,283 @@ def time_series_churn_predict():
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@app.get("/ml-raw-data/")
+def get_ml_raw_data(churn_count: int = 3, non_churn_count: int = 12):
+    """Fetch raw ML data for customers with configurable churn and non-churn counts"""
+    try:
+        # Validate input parameters
+        if churn_count < 0 or churn_count > 10:
+            raise HTTPException(status_code=400, detail="churn_count must be between 0 and 10")
+        if non_churn_count < 0 or non_churn_count > 40:
+            raise HTTPException(status_code=400, detail="non_churn_count must be between 0 and 40")
+        
+        engine = get_db_engine()
+        
+        # Use the same SQL query as ML prediction but return raw data
+        query = f"""
+        WITH last_20_weeks AS (
+            SELECT DISTINCT week_end_date
+            FROM mosaic_db.customer_tx_weekly
+            WHERE WEEKDAY(week_end_date) = 5  -- Saturdays
+            ORDER BY week_end_date DESC
+            LIMIT 20
+        ),
+
+        -- Get top churn customers
+        churn_customers AS (
+            SELECT customer_id, MAX(week_end_date) AS last_week
+            FROM mosaic_db.sample_data
+            WHERE is_churn = 1
+            GROUP BY customer_id
+            ORDER BY last_week DESC
+            LIMIT {churn_count}
+        ),
+
+        -- Get top non-churn customers
+        non_churn_customers AS (
+            SELECT customer_id, MAX(week_end_date) AS last_week
+            FROM mosaic_db.sample_data
+            WHERE is_churn = 0
+            GROUP BY customer_id
+            ORDER BY last_week DESC
+            LIMIT {non_churn_count}
+        ),
+
+        -- Combine selected customers
+        selected_customers AS (
+            SELECT customer_id, 1 AS is_churn FROM churn_customers
+            UNION ALL
+            SELECT customer_id, 0 AS is_churn FROM non_churn_customers
+        ),
+
+        -- Generate complete panel with all 20 weeks per customer
+        panel_data AS (
+            SELECT 
+                sc.customer_id,
+                sc.is_churn,
+                w.week_end_date
+            FROM selected_customers sc
+            CROSS JOIN last_20_weeks w
+        ),
+
+        -- Join with actual transactions (if available)
+        joined_data AS (
+            SELECT 
+                p.customer_id,
+                p.week_end_date,
+                COALESCE(sd.order_count, 0) AS order_count,
+                COALESCE(sd.order_total, 0) AS order_total,
+                COALESCE(sd.discount_total, 0) AS discount_total,
+                COALESCE(sd.loyalty_earned, 0) AS loyalty_earned,
+                p.is_churn
+            FROM panel_data p
+            LEFT JOIN mosaic_db.sample_data sd
+                ON p.customer_id = sd.customer_id
+                AND p.week_end_date = sd.week_end_date
+        )
+
+        -- Final result
+        SELECT 
+            customer_id,
+            week_end_date,
+            order_count,
+            order_total,
+            discount_total,
+            loyalty_earned,
+            is_churn
+        FROM joined_data
+        ORDER BY is_churn ASC, customer_id, week_end_date DESC;
+        """
+        
+        df = pd.read_sql(query, engine)
+        
+        if df.empty:
+            raise HTTPException(status_code=404, detail="No ML raw data found")
+        
+        # Convert to CSV for download
+        out = io.StringIO()
+        df.to_csv(out, index=False)
+        out.seek(0)
+        
+        return {
+            "csv_data": out.getvalue(),
+            "total_records": len(df),
+            "unique_customers": df['customer_id'].nunique(),
+            "churned_customers": df[df['is_churn'] == 1]['customer_id'].nunique(),
+            "non_churned_customers": df[df['is_churn'] == 0]['customer_id'].nunique(),
+            "churn_count": churn_count,
+            "non_churn_count": non_churn_count,
+            "date_range": {
+                "start_date": df['week_end_date'].min().strftime('%Y-%m-%d'),
+                "end_date": df['week_end_date'].max().strftime('%Y-%m-%d')
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/ml-churn-predict/")
+def ml_churn_predict(churn_count: int = 3, non_churn_count: int = 12):
+    """Predict churn using ML model with custom churn and non-churn customer counts"""
+    try:
+        # Validate input parameters
+        if churn_count < 0 or churn_count > 10:
+            raise HTTPException(status_code=400, detail="churn_count must be between 0 and 10")
+        if non_churn_count < 0 or non_churn_count > 40:
+            raise HTTPException(status_code=400, detail="non_churn_count must be between 0 and 40")
+        
+        engine = get_db_engine()
+        
+        # Use the provided SQL query
+        query = f"""
+        WITH last_20_weeks AS (
+            SELECT DISTINCT week_end_date
+            FROM mosaic_db.customer_tx_weekly
+            WHERE WEEKDAY(week_end_date) = 5  -- Saturdays
+            ORDER BY week_end_date DESC
+            LIMIT 20
+        ),
+
+        -- Get top churn customers
+        churn_customers AS (
+            SELECT customer_id, MAX(week_end_date) AS last_week
+            FROM mosaic_db.sample_data
+            WHERE is_churn = 1
+            GROUP BY customer_id
+            ORDER BY last_week DESC
+            LIMIT {churn_count}
+        ),
+
+        -- Get top non-churn customers
+        non_churn_customers AS (
+            SELECT customer_id, MAX(week_end_date) AS last_week
+            FROM mosaic_db.sample_data
+            WHERE is_churn = 0
+            GROUP BY customer_id
+            ORDER BY last_week DESC
+            LIMIT {non_churn_count}
+        ),
+
+        -- Combine selected customers
+        selected_customers AS (
+            SELECT customer_id, 1 AS is_churn FROM churn_customers
+            UNION ALL
+            SELECT customer_id, 0 AS is_churn FROM non_churn_customers
+        ),
+
+        -- Generate complete panel with all 20 weeks per customer
+        panel_data AS (
+            SELECT 
+                sc.customer_id,
+                sc.is_churn,
+                w.week_end_date
+            FROM selected_customers sc
+            CROSS JOIN last_20_weeks w
+        ),
+
+        -- Join with actual transactions (if available)
+        joined_data AS (
+            SELECT 
+                p.customer_id,
+                p.week_end_date,
+                COALESCE(sd.order_count, 0) AS order_count,
+                COALESCE(sd.order_total, 0) AS order_total,
+                COALESCE(sd.discount_total, 0) AS discount_total,
+                COALESCE(sd.loyalty_earned, 0) AS loyalty_earned,
+                p.is_churn
+            FROM panel_data p
+            LEFT JOIN mosaic_db.sample_data sd
+                ON p.customer_id = sd.customer_id
+                AND p.week_end_date = sd.week_end_date
+        )
+
+        -- Final result
+        SELECT 
+            customer_id,
+            week_end_date,
+            order_count,
+            order_total,
+            discount_total,
+            loyalty_earned,
+            is_churn
+        FROM joined_data
+        ORDER BY is_churn ASC, customer_id, week_end_date DESC;
+        """
+        
+        df = pd.read_sql(query, engine)
+        
+        if df.empty:
+            raise HTTPException(status_code=404, detail="No data found for the specified customer counts")
+        
+        # Create features for prediction using the time series model
+        feature_df = create_time_series_features_for_prediction(df)
+        
+        if feature_df.empty:
+            raise HTTPException(status_code=404, detail="No customers with sufficient history for prediction")
+        
+        # Prepare features for prediction
+        X = pd.DataFrame(feature_df["features"].to_list())
+        
+        # Scale features
+        X_scaled = time_series_scaler.transform(X)
+        
+        # Predict churn
+        predictions = time_series_model.predict(X_scaled)
+        prediction_probas = time_series_model.predict_proba(X_scaled)[:, 1]
+        
+        # Create results dataframe
+        results_df = feature_df.copy()
+        results_df['churn_probability'] = prediction_probas
+        results_df['predicted_churn'] = predictions
+        
+        # Get feature importance
+        if hasattr(time_series_model, 'feature_importances_'):
+            importances = time_series_model.feature_importances_
+        elif hasattr(time_series_model, 'coef_'):
+            importances = abs(time_series_model.coef_[0])
+        else:
+            from sklearn.inspection import permutation_importance
+            result = permutation_importance(time_series_model, X_scaled, predictions, n_repeats=10, random_state=42)
+            importances = result.importances_mean
+        
+        # Get top 3 features
+        feature_importance_pairs = list(zip(time_series_feature_names, importances))
+        feature_importance_pairs.sort(key=lambda x: x[1], reverse=True)
+        top_features = feature_importance_pairs[:3]
+        
+        # Add top contributing factors to output
+        results_df['top_factor_1'] = time_series_feature_importance_map.get(top_features[0][0], top_features[0][0])
+        results_df['top_factor_2'] = time_series_feature_importance_map.get(top_features[1][0], top_features[1][0])
+        results_df['top_factor_3'] = time_series_feature_importance_map.get(top_features[2][0], top_features[2][0])
+        
+        # Filter only predicted churn customers
+        churned_customers = results_df[results_df['predicted_churn'] == 1].copy()
+        
+        # Select required columns for output
+        output_columns = ['customer_id', 'churn_probability', 'top_factor_1', 'top_factor_2', 'top_factor_3']
+        churned_customers = churned_customers[output_columns]
+        
+        # Convert to CSV
+        out = io.StringIO()
+        churned_customers.to_csv(out, index=False)
+        out.seek(0)
+        
+        return {
+            "csv_data": out.getvalue(),
+            "churn_count": len(churned_customers),
+            "total_customers": len(feature_df),
+            "churn_rate": len(churned_customers) / len(feature_df) if len(feature_df) > 0 else 0,
+            "top_factors": [
+                {"feature": time_series_feature_importance_map.get(feat, feat), "importance": float(imp)}
+                for feat, imp in top_features
+            ],
+            "input_churn_count": churn_count,
+            "input_non_churn_count": non_churn_count
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 @app.get("/sample-data/")
 def get_sample_data(churn_count: int = 3, non_churn_count: int = 12):
     """Fetch sample data for customers with configurable churn and non-churn counts"""
